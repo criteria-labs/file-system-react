@@ -75,7 +75,8 @@ export async function createFile(
       const newFile = await directory.getFileHandle(name, {
         create: true,
       });
-      fileSystem = { ...fileSystem, [`${directoryPath}/${name}`]: newFile };
+      const newPath = `${directoryPath}/${name}`;
+      fileSystem = { ...fileSystem, [newPath]: newFile };
       filteredFileSystemsCache.clear();
 
       if (data) {
@@ -85,7 +86,8 @@ export async function createFile(
         await writable.close();
       }
 
-      notifyFileSystemListeners([directoryPath, `${directoryPath}/${name}`]);
+      notifyFileSystemListeners([directoryPath, newPath]);
+      return newPath;
     } else {
       throw error;
     }
@@ -108,13 +110,15 @@ export async function createDirectory(directoryPath: string, name: string) {
       const newDirectory = await directory.getDirectoryHandle(name, {
         create: true,
       });
+      const newPath = `${directoryPath}/${name}`;
       fileSystem = {
         ...fileSystem,
-        [`${directoryPath}/${name}`]: newDirectory,
+        [newPath]: newDirectory,
       };
       filteredFileSystemsCache.clear();
 
-      notifyFileSystemListeners([directoryPath, `${directoryPath}/${name}`]);
+      notifyFileSystemListeners([directoryPath, newPath]);
+      return newPath;
     } else {
       throw error;
     }
@@ -145,6 +149,9 @@ export async function renameFile(filePath: string, newName: string) {
     filteredFileSystemsCache.clear();
 
     notifyFileSystemListeners([directoryPath, filePath, newFilePath]);
+    return newFilePath;
+  } else {
+    return filePath;
   }
 }
 
@@ -175,8 +182,10 @@ export async function moveFile(filePath: string, directoryPath: string) {
         directoryPath,
         newFilePath,
       ]);
+      return newFilePath;
     }
   }
+  return filePath;
 }
 
 export async function removeEntry(
