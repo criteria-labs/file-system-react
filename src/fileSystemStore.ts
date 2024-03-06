@@ -136,7 +136,7 @@ export async function renameFile(filePath: string, newName: string) {
   }
 
   if ("move" in file && typeof file.move === "function") {
-    file.move(newName);
+    await file.move(newName);
 
     const directoryPath = filePath.slice(0, filePath.lastIndexOf("/"));
     const newFilePath = `${directoryPath}/${newName}`;
@@ -201,7 +201,7 @@ export async function moveFile(filePath: string, directoryPath: string) {
   const directory = fileSystem[directoryPath];
   if (file && isFileHandle(file) && directory && isDirectoryHandle(directory)) {
     if ("move" in file && typeof file.move === "function") {
-      file.move(directory);
+      await file.move(directory);
 
       const oldDirectoryPath = filePath.slice(0, filePath.lastIndexOf("/"));
       const newFilePath = `${directoryPath}/${file.name}`;
