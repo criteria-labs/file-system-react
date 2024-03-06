@@ -263,12 +263,13 @@ export async function initializeFileSystemIfNeeded() {
   }
   initialized = true;
 
-  fileSystem = {};
+  const initialFileSystem: FileSystem = {};
   const root = await navigator.storage.getDirectory();
   await visitHandles(root, (path, handle) => {
-    fileSystem[path] = handle;
+    initialFileSystem[path] = handle;
   });
 
+  fileSystem = initialFileSystem;
   filteredFileSystemsCache.clear();
 
   notifyFileSystemListeners();
