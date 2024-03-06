@@ -4,7 +4,7 @@ import { isFileHandle } from "./utilities";
 
 export function useFile(filePath: string) {
   const handles = useFileSystem({ filter: (path) => path === filePath });
-  const handle = handles.get(filePath);
+  const handle = handles[filePath];
 
   const [file, setFile] = useState<File | undefined>(undefined);
 

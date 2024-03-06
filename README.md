@@ -14,7 +14,7 @@ function Component() {
 
   return (
     <ul>
-      {handlesByPath.map((handle, path) => (
+      {Object.entries(handlesByPath).map(([path, handle]) => (
         <li key={path}>{path}</li>
       ))}
     <ul>

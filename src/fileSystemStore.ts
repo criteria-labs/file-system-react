@@ -1,9 +1,12 @@
 import { isDirectoryHandle, isFileHandle, visitHandles } from "./utilities";
 
-export type FileSystemOptions = { filter?: (path: string) => boolean };
+export type FileSystem = Record<string, FileSystemHandle>;
+export type FileSystemFilter = (path: string) => boolean;
+export type FileSystemOptions = { filter?: FileSystemFilter };
 export type FileSystemListener = () => void;
 
-let fileSystem = new Map<string, FileSystemHandle>();
+let fileSystem: FileSystem = {};
+
 let listeners = new Map<FileSystemListener, FileSystemOptions>();
 
 export function addFileSystemListener(
@@ -29,23 +32,31 @@ const notifyFileSystemListeners = (changedPaths?: string[]) => {
   });
 };
 
+let filteredFileSystemsCache = new Map<FileSystemFilter, FileSystem>();
+
 export function getFileSystem(options?: FileSystemOptions) {
   const filter = options?.filter;
   if (!filter) {
     return fileSystem;
   }
 
-  const snapshot = new Map<string, FileSystemHandle>();
-  fileSystem.forEach((handle, path) => {
+  const cached = filteredFileSystemsCache.get(filter);
+  if (cached) {
+    return cached;
+  }
+
+  const filteredFileSystem: FileSystem = {};
+  Object.entries(fileSystem).forEach(([path, handle]) => {
     if (filter(path)) {
-      snapshot.set(path, handle);
+      filteredFileSystem[path] = handle;
     }
   });
-  return snapshot;
+  filteredFileSystemsCache.set(filter, filteredFileSystem);
+  return filteredFileSystem;
 }
 
 export async function createFile(directoryPath: string, name: string) {
-  const directory = fileSystem.get(directoryPath);
+  const directory = fileSystem[directoryPath];
   if (!directory || !isDirectoryHandle(directory)) {
     throw new Error("No directory at path");
   }
@@ -60,7 +71,8 @@ export async function createFile(directoryPath: string, name: string) {
       const newFile = await directory.getFileHandle(name, {
         create: true,
       });
-      fileSystem.set(`${directoryPath}/${name}`, newFile);
+      fileSystem = { ...fileSystem, [`${directoryPath}/${name}`]: newFile };
+      filteredFileSystemsCache.clear();
 
       notifyFileSystemListeners([directoryPath, `${directoryPath}/${name}`]);
     } else {
@@ -70,7 +82,7 @@ export async function createFile(directoryPath: string, name: string) {
 }
 
 export async function createDirectory(directoryPath: string, name: string) {
-  const directory = fileSystem.get(directoryPath);
+  const directory = fileSystem[directoryPath];
   if (!directory || !isDirectoryHandle(directory)) {
     throw new Error("No directory at path");
   }
@@ -85,7 +97,11 @@ export async function createDirectory(directoryPath: string, name: string) {
       const newDirectory = await directory.getDirectoryHandle(name, {
         create: true,
       });
-      fileSystem.set(`${directoryPath}/${name}`, newDirectory);
+      fileSystem = {
+        ...fileSystem,
+        [`${directoryPath}/${name}`]: newDirectory,
+      };
+      filteredFileSystemsCache.clear();
 
       notifyFileSystemListeners([directoryPath, `${directoryPath}/${name}`]);
     } else {
@@ -99,7 +115,7 @@ export async function renameFile(filePath: string, newName: string) {
     throw new Error("Cannot rename file system root");
   }
 
-  const file = fileSystem.get(filePath);
+  const file = fileSystem[filePath];
   if (!file || !isFileHandle) {
     throw new Error("No file at path");
   }
@@ -110,8 +126,12 @@ export async function renameFile(filePath: string, newName: string) {
     const directoryPath = filePath.slice(0, filePath.lastIndexOf("/"));
     const newFilePath = `${directoryPath}/${newName}`;
 
-    fileSystem.delete(filePath);
-    fileSystem.set(newFilePath, file);
+    const { [filePath]: _, ...rest } = fileSystem;
+    fileSystem = {
+      ...rest,
+      [newFilePath]: file,
+    };
+    filteredFileSystemsCache.clear();
 
     notifyFileSystemListeners([directoryPath, filePath, newFilePath]);
   }
@@ -122,8 +142,8 @@ export async function moveFile(filePath: string, directoryPath: string) {
     throw new Error("Cannot move file system root");
   }
 
-  const file = fileSystem.get(filePath);
-  const directory = fileSystem.get(directoryPath);
+  const file = fileSystem[filePath];
+  const directory = fileSystem[directoryPath];
   if (file && isFileHandle(file) && directory && isDirectoryHandle(directory)) {
     if ("move" in file && typeof file.move === "function") {
       file.move(directory);
@@ -131,8 +151,12 @@ export async function moveFile(filePath: string, directoryPath: string) {
       const oldDirectoryPath = filePath.slice(0, filePath.lastIndexOf("/"));
       const newFilePath = `${directoryPath}/${file.name}`;
 
-      fileSystem.delete(filePath);
-      fileSystem.set(newFilePath, file);
+      const { [filePath]: _, ...rest } = fileSystem;
+      fileSystem = {
+        ...rest,
+        [newFilePath]: file,
+      };
+      filteredFileSystemsCache.clear();
 
       notifyFileSystemListeners([
         oldDirectoryPath,
@@ -153,7 +177,7 @@ export async function removeEntry(
   }
 
   const directoryPath = path.slice(0, path.lastIndexOf("/"));
-  const directory = fileSystem.get(directoryPath);
+  const directory = fileSystem[directoryPath];
   if (!directory || !isDirectoryHandle(directory)) {
     throw new Error("No directory at path");
   }
@@ -162,13 +186,15 @@ export async function removeEntry(
 
   const removedPaths = [path];
   if (options?.recursive) {
-    for (const candidate of fileSystem.keys()) {
+    for (const candidate of Object.keys(fileSystem)) {
       if (candidate.startsWith(`${path}/`)) {
         removedPaths.push(candidate);
       }
     }
   }
-  removedPaths.forEach((removedPath) => fileSystem.delete(removedPath));
+  fileSystem = { ...fileSystem };
+  removedPaths.forEach((removedPath) => delete fileSystem[removedPath]);
+  filteredFileSystemsCache.clear();
 
   notifyFileSystemListeners([directoryPath, ...removedPaths]);
 }
@@ -177,30 +203,37 @@ export async function reloadFileSystem(options?: FileSystemOptions) {
   const filter = options?.filter;
 
   if (filter) {
-    const newFileSystem = new Map<string, FileSystemHandle>();
+    const filteredFileSystem: FileSystem = {};
     const root = await navigator.storage.getDirectory();
     await visitHandles(root, (path, handle) => {
       if (filter(path)) {
-        newFileSystem.set(path, handle);
+        filteredFileSystem[path] = handle;
       }
     });
 
     const removedPaths: string[] = [];
-    for (const path of fileSystem.keys()) {
-      if (filter(path) && !newFileSystem.has(path)) {
+    for (const path of Object.keys(fileSystem)) {
+      if (filter(path) && !(path in filteredFileSystem)) {
         removedPaths.push(path);
       }
     }
-    removedPaths.forEach((removedPath) => fileSystem.delete(removedPath));
-    newFileSystem.forEach((handle, path) => fileSystem.set(path, handle));
+    fileSystem = { ...fileSystem, ...filteredFileSystem };
+    removedPaths.forEach((removedPath) => delete fileSystem[removedPath]);
 
-    notifyFileSystemListeners([...removedPaths, ...newFileSystem.keys()]);
+    filteredFileSystemsCache.clear();
+
+    notifyFileSystemListeners([
+      ...removedPaths,
+      ...Object.keys(filteredFileSystem),
+    ]);
   } else {
-    fileSystem = new Map<string, FileSystemHandle>();
+    fileSystem = {};
     const root = await navigator.storage.getDirectory();
     await visitHandles(root, (path, handle) => {
-      fileSystem.set(path, handle);
+      fileSystem[path] = handle;
     });
+
+    filteredFileSystemsCache.clear();
 
     notifyFileSystemListeners();
   }
