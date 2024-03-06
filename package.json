@@ -1,6 +1,6 @@
 {
   "name": "@criteria/file-system-react",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "React hooks for working with the File System API.",
   "keywords": [
     "file system api"
