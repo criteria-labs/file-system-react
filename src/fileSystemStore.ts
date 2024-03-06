@@ -215,6 +215,7 @@ export async function initializeFileSystemIfNeeded() {
   if (initialized) {
     return;
   }
+  initialized = true;
 
   fileSystem = {};
   const root = await navigator.storage.getDirectory();
