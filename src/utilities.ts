@@ -18,7 +18,7 @@ export async function visitHandles(
   if (isDirectoryHandle(root)) {
     for await (const child of root.values()) {
       visitHandles(child, (path, handle) =>
-        visitor(`${handle.name}/${path}`, handle)
+        visitor(`${root.name}/${path}`, handle)
       );
     }
   }

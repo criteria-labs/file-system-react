@@ -131,7 +131,7 @@ export async function renameFile(filePath: string, newName: string) {
   }
 
   const file = fileSystem[filePath];
-  if (!file || !isFileHandle) {
+  if (!file || !isFileHandle(file)) {
     throw new Error("No file at path");
   }
 
