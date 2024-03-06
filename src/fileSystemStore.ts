@@ -55,7 +55,11 @@ export function getFileSystem(options?: FileSystemOptions) {
   return filteredFileSystem;
 }
 
-export async function createFile(directoryPath: string, name: string) {
+export async function createFile(
+  directoryPath: string,
+  name: string,
+  data?: FileSystemWriteChunkType
+) {
   const directory = fileSystem[directoryPath];
   if (!directory || !isDirectoryHandle(directory)) {
     throw new Error("No directory at path");
@@ -73,6 +77,13 @@ export async function createFile(directoryPath: string, name: string) {
       });
       fileSystem = { ...fileSystem, [`${directoryPath}/${name}`]: newFile };
       filteredFileSystemsCache.clear();
+
+      if (data) {
+        const writable = await newFile.createWritable();
+        await writable.truncate(0);
+        await writable.write(data);
+        await writable.close();
+      }
 
       notifyFileSystemListeners([directoryPath, `${directoryPath}/${name}`]);
     } else {
