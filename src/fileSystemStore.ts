@@ -210,42 +210,19 @@ export async function removeEntry(
   notifyFileSystemListeners([directoryPath, ...removedPaths]);
 }
 
-export async function reloadFileSystem(options?: FileSystemOptions) {
-  const filter = options?.filter;
-
-  if (filter) {
-    const filteredFileSystem: FileSystem = {};
-    const root = await navigator.storage.getDirectory();
-    await visitHandles(root, (path, handle) => {
-      if (filter(path)) {
-        filteredFileSystem[path] = handle;
-      }
-    });
-
-    const removedPaths: string[] = [];
-    for (const path of Object.keys(fileSystem)) {
-      if (filter(path) && !(path in filteredFileSystem)) {
-        removedPaths.push(path);
-      }
-    }
-    fileSystem = { ...fileSystem, ...filteredFileSystem };
-    removedPaths.forEach((removedPath) => delete fileSystem[removedPath]);
-
-    filteredFileSystemsCache.clear();
-
-    notifyFileSystemListeners([
-      ...removedPaths,
-      ...Object.keys(filteredFileSystem),
-    ]);
-  } else {
-    fileSystem = {};
-    const root = await navigator.storage.getDirectory();
-    await visitHandles(root, (path, handle) => {
-      fileSystem[path] = handle;
-    });
-
-    filteredFileSystemsCache.clear();
-
-    notifyFileSystemListeners();
+let initialized = false;
+export async function initializeFileSystemIfNeeded() {
+  if (initialized) {
+    return;
   }
+
+  fileSystem = {};
+  const root = await navigator.storage.getDirectory();
+  await visitHandles(root, (path, handle) => {
+    fileSystem[path] = handle;
+  });
+
+  filteredFileSystemsCache.clear();
+
+  notifyFileSystemListeners();
 }

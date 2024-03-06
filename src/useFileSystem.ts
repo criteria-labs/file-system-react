@@ -3,7 +3,7 @@ import {
   FileSystemOptions,
   addFileSystemListener,
   getFileSystem,
-  reloadFileSystem,
+  initializeFileSystemIfNeeded,
   removeFileSystemListener,
 } from "./fileSystemStore";
 
@@ -25,7 +25,7 @@ export function useFileSystem(options?: FileSystemOptions) {
   const store = useSyncExternalStore(subscribe, getSnapshot);
 
   useEffect(() => {
-    reloadFileSystem(options);
+    initializeFileSystemIfNeeded();
   });
 
   return store;
