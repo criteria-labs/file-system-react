@@ -155,6 +155,43 @@ export async function renameFile(filePath: string, newName: string) {
   }
 }
 
+export async function renameDirectory(directoryPath: string, newName: string) {
+  if (directoryPath === "") {
+    throw new Error("Cannot rename file system root");
+  }
+
+  const directory = fileSystem[directoryPath];
+  if (!directory || !isDirectoryHandle(directory)) {
+    throw new Error("No directory at path");
+  }
+
+  if ("move" in directory && typeof directory.move === "function") {
+    await directory.move(newName);
+
+    const parentDirectoryPath = directoryPath.slice(
+      0,
+      directoryPath.lastIndexOf("/")
+    );
+    const newDirectoryPath = `${parentDirectoryPath}/${newName}`;
+
+    const { [directoryPath]: _, ...rest } = fileSystem;
+    fileSystem = {
+      ...rest,
+      [newDirectoryPath]: directory,
+    };
+    filteredFileSystemsCache.clear();
+
+    notifyFileSystemListeners([
+      parentDirectoryPath,
+      directoryPath,
+      newDirectoryPath,
+    ]);
+    return newDirectoryPath;
+  } else {
+    return directoryPath;
+  }
+}
+
 export async function moveFile(filePath: string, directoryPath: string) {
   if (filePath === "") {
     throw new Error("Cannot move file system root");
